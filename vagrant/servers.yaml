@@ -1,0 +1,102 @@
+- name: central-js
+  folder: '../'
+  network: 
+    ip: 192.168.10.10
+  provisioners:
+    - name: "prepare"
+      params:
+        :type: "shell"
+        :path: "scripts/prepare.sh"
+    - name: "prepare-js"
+      params:
+        :type: "shell"
+        :path: "scripts/js/prepare.sh"
+        :args: "central-js"
+    - name: "prepare-central-js"
+      params:
+        :type: "shell"
+        :path: "scripts/js/central/prepare.sh"
+    - name: "up"
+      params:
+        :type: "shell"
+        :path: "scripts/js/up.sh"
+        :privileged: false
+        :run: "always"
+        :args: "central-js"
+
+
+- name: dashboard-js
+  folder: '../'
+  network: 
+    ip: 192.168.10.11
+  provisioners:
+    - name: "prepare"
+      params:
+        :type: "shell"
+        :path: "scripts/prepare.sh"
+    - name: "prepare-js"
+      params:
+        :type: "shell"
+        :path: "scripts/js/prepare.sh"
+        :args: "central-js"
+    - name: "up"
+      params:
+        :type: "shell"
+        :path: "scripts/js/up.sh"
+        :privileged: false
+        :run: "always"
+        :args: "dashboard-js"
+
+
+- name: wf-central
+  folder: '../'
+  network: 
+    ip: 192.168.10.12
+  provisioners:
+    - name: "prepare"
+      params:
+        :type: "shell"
+        :path: "scripts/prepare.sh"
+    - name: "prepare-wf"
+      params:
+        :type: "shell"
+        :path: "scripts/wf/prepare.sh"
+    - name: "clean-wf"
+      params:
+        :type: "shell"
+        :path: "scripts/wf/clean.sh"
+        :privileged: false
+    - name: "update-wf"
+      params:
+        :type: "shell"
+        :path: "scripts/wf/update.sh"
+        :privileged: false
+        :run: "always"
+        :args: "wf-central/target/wf-central.war"
+
+
+- name: wf-region
+  folder: '../'
+  network: 
+    ip: 192.168.10.13
+  provisioners:
+    - name: "prepare"
+      params:
+        :type: "shell"
+        :path: "scripts/prepare.sh"
+    - name: "prepare-wf"
+      params:
+        :type: "shell"
+        :path: "scripts/wf/prepare.sh"
+    - name: "clean-wf"
+      params:
+        :type: "shell"
+        :path: "scripts/wf/clean.sh"
+        :privileged: false
+    - name: "update-wf"
+      params:
+        :type: "shell"
+        :path: "scripts/wf/update.sh"
+        :privileged: false
+        :run: "always"
+        :args: "wf-region/target/wf-region.war"
