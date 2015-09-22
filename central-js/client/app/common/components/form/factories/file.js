@@ -4,6 +4,10 @@ angular.module('app').factory('FileFactory', function ($q, $rootScope, ActivitiS
     this.value = null;
   };
 
+  file.prototype.createFactory = function(){
+    return new file();
+  };
+
   file.prototype.remove = function (file) {
     uiUploader.remove(file);
   };
@@ -81,6 +85,10 @@ angular.module('app').factory('FileFactory', function ($q, $rootScope, ActivitiS
 
   file.prototype.get = function () {
     return this.value;
+  };
+
+  file.prototype.isFit = function(property){
+    return property.type === 'file';
   };
 
   return file;

@@ -43,6 +43,8 @@ import static org.wf.dp.dniprorada.model.DocumentOperatorTest.DUMMY_OPERATOR_ID;
 @ActiveProfiles("default")
 public class ActivitiRestDocumentControllerTest {
 
+    public static final String APPLICATION_JSON_CHARSET_UTF_8 = "application/json;charset=UTF-8";
+
     @Autowired
     private WebApplicationContext webApplicationContext;
     private MockMvc mockMvc;
@@ -85,7 +87,8 @@ public class ActivitiRestDocumentControllerTest {
         String jsonData = mockMvc
             .perform(get("/services/getDocumentAccessByHandler")
                     .param("sCode_DocumentAccess", "1")
-                    .param("nID_DocumentOperator_SubjectOrgan", "2"))
+                    .param("nID_DocumentOperator_SubjectOrgan", "2")
+                    .param("nID_Subject", "1"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON))
             .andReturn()
@@ -107,16 +110,17 @@ public class ActivitiRestDocumentControllerTest {
         String jsonData = mockMvc
             .perform(get("/services/getDocumentAccessByHandler")
                     .param("sCode_DocumentAccess", "1")
-                    .param("nID_DocumentOperator_SubjectOrgan", organID))
+                    .param("nID_DocumentOperator_SubjectOrgan", organID)
+                    .param("nID_Subject", "1"))
             .andExpect(status().is5xxServerError())
-            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andExpect(content().contentType(APPLICATION_JSON_CHARSET_UTF_8))
             .andReturn()
             .getResponse()
             .getContentAsString();
 
         ErrMessage msg = JsonRestUtils.readObject(jsonData, ErrMessage.class);
         assertNotNull("Expected error message not found", msg);
-        assertEquals("Organ with ID:"+organID+" not found", msg.getMessage());
+        assertEquals("Entity with nID_SubjectOrgan='" + organID + "' not found", msg.getMessage());
     }
 
     @Test
@@ -124,9 +128,10 @@ public class ActivitiRestDocumentControllerTest {
         String jsonData = mockMvc
             .perform(get("/services/getDocumentAccessByHandler")
                     .param("sCode_DocumentAccess", "100500")
-                    .param("nID_DocumentOperator_SubjectOrgan", "2"))
+                    .param("nID_DocumentOperator_SubjectOrgan", "2")
+                    .param("nID_Subject", "1"))
             .andExpect(status().is5xxServerError())
-            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andExpect(content().contentType(APPLICATION_JSON_CHARSET_UTF_8))
             .andReturn()
             .getResponse()
             .getContentAsString();
@@ -142,7 +147,8 @@ public class ActivitiRestDocumentControllerTest {
             .perform(get("/services/getDocumentAccessByHandler")
                     .param("sCode_DocumentAccess", "2")
                     .param("nID_DocumentOperator_SubjectOrgan", "2")
-                    .param("sPass", "123"))
+                    .param("sPass", "123")
+                    .param("nID_Subject", "1"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON))
             .andReturn()
@@ -166,7 +172,8 @@ public class ActivitiRestDocumentControllerTest {
             .perform(get("/services/getDocumentAccessByHandler")
                     .param("sCode_DocumentAccess", "2")
                     .param("nID_DocumentOperator_SubjectOrgan", "2")
-                    .param("sPass", "100500"))
+                    .param("sPass", "100500")
+                    .param("nID_Subject", "1"))
             .andExpect(status().is5xxServerError())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON))
             .andReturn()
@@ -186,7 +193,8 @@ public class ActivitiRestDocumentControllerTest {
                     .param("sCode_DocumentAccess", "2")
                     .param("nID_DocumentOperator_SubjectOrgan", "2")
                     .param("nID_DocumentType", "1")
-                    .param("sPass", "123"))
+                    .param("sPass", "123")
+                    .param("nID_Subject", "1"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON))
             .andReturn()
@@ -206,12 +214,14 @@ public class ActivitiRestDocumentControllerTest {
     public void getDocumentByCodeAndWrongDocumentTypeAndOrganAndPassword() throws Exception {
         String jsonData = mockMvc
             .perform(get("/services/getDocumentAccessByHandler")
-                    .param("sCode_DocumentAccess", "2")
+                            .param("sCode_DocumentAccess", "2")
                     .param("nID_DocumentOperator_SubjectOrgan", "2")
                     .param("nID_DocumentType", "2")
-                    .param("sPass", "123"))
+                    .param("sPass", "123")
+                            .param("nID_Subject", "1")
+            )
             .andExpect(status().is5xxServerError())
-            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andExpect(content().contentType(APPLICATION_JSON_CHARSET_UTF_8))
             .andReturn()
             .getResponse()
             .getContentAsString();

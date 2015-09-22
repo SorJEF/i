@@ -6,10 +6,14 @@ angular.module('app').controller('ServiceBuiltInBankIDController', function(
   FormDataFactory,
   ActivitiService,
   ValidationService,
+  oService,
   oServiceData,
   BankIDAccount,
   ActivitiForm,
-  uiUploader) {
+  uiUploader,
+  FieldAttributesService,
+  MarkersFactory,
+  FieldMotionService) {
 
   'use strict';
 
@@ -56,7 +60,8 @@ angular.module('app').controller('ServiceBuiltInBankIDController', function(
   $scope.data.formData = new FormDataFactory();
   $scope.data.formData.initialize(ActivitiForm);
   $scope.data.formData.setBankIDAccount(BankIDAccount);
-
+  //TODO uncomment after testing
+  $scope.data.formData.uploadScansFromBankID(oServiceData);
   var currentState = $state.$current;
 
   $scope.data.region = currentState.data.region;
@@ -109,6 +114,20 @@ angular.module('app').controller('ServiceBuiltInBankIDController', function(
       field.type = 'tel';
       field.sFieldType = 'tel';
     }
+    if (field.type == 'markers' && $.trim(field.value)) {
+      var sourceObj = null;
+      try {
+        sourceObj = JSON.parse(field.value);
+      } catch (ex) {
+        alert('markers attribute ' + field.name + " contain bad formatted json\n" + ex.name + ", " + ex.message
+          + "\nfield.value: " + field.value
+        );
+      }
+      if (sourceObj !== null)
+        _.merge(MarkersFactory.getMarkers(), sourceObj, function (destVal, sourceVal) {
+          if (_.isArray(sourceVal)) return sourceVal;
+        });
+    }
   });
 
   $scope.submit = function(form) {
@@ -120,7 +139,7 @@ angular.module('app').controller('ServiceBuiltInBankIDController', function(
 
     if (form.$valid && bValid) { //
       ActivitiService
-        .submitForm(oServiceData, $scope.data.formData)
+        .submitForm(oService, oServiceData, $scope.data.formData)
         .then(function(result) {
 
           $scope.isSending = false;
@@ -128,7 +147,10 @@ angular.module('app').controller('ServiceBuiltInBankIDController', function(
           var state = $state.$current;
 
           var submitted = $state.get(state.name + '.submitted');
-
+          if (!result.id) {
+            console.log(result);
+            return;
+          }
           //TODO: Fix Alhoritm Luna
           var nCRC = ValidationService.getLunaValue(result.id);
 
@@ -199,6 +221,33 @@ angular.module('app').controller('ServiceBuiltInBankIDController', function(
       }
     }
     $scope.$apply();
+  };
+
+  $scope.showFormField = function(property) {
+    var fieldES = FieldAttributesService.editableStatusFor(property.id);
+    var ES = FieldAttributesService.EditableStatus;
+    return (
+        !$scope.data.formData.fields[property.id]
+        && property.type!='invisible'
+        && property.type!='markers'
+        && fieldES == ES.NOT_SET
+    ) || fieldES == ES.EDITABLE
+  };
+
+  $scope.renderAsLabel = function(property) {
+    var fieldES = FieldAttributesService.editableStatusFor(property.id);
+    var ES = FieldAttributesService.EditableStatus;
+    //property.type !== 'file'
+    return (
+            $scope.data.formData.fields[property.id]
+      &&  fieldES == ES.NOT_SET
+    ) || fieldES == ES.READ_ONLY;
+  };
+
+  $scope.isFieldVisible = function(property) {
+    return property.id != 'processName'
+    && (FieldMotionService.isFieldMentioned(property.id) ?
+        FieldMotionService.isFieldVisible(property.id, $scope.data.formData.params) : true);
   };
 
   // $timeout(function () {

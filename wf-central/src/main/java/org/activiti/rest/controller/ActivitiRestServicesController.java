@@ -1,46 +1,41 @@
 package org.activiti.rest.controller;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-
-import javax.servlet.http.HttpServletResponse;
-
+import org.apache.commons.collections.CollectionUtils;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.wf.dp.dniprorada.base.dao.BaseEntityDao;
 import org.wf.dp.dniprorada.base.model.Entity;
 import org.wf.dp.dniprorada.base.util.JsonRestUtils;
 import org.wf.dp.dniprorada.base.util.SerializableResponseEntity;
 import org.wf.dp.dniprorada.base.util.caching.CachedInvocationBean;
+import org.wf.dp.dniprorada.base.util.caching.MethodCacheInterceptor;
 import org.wf.dp.dniprorada.base.viewobject.ResultMessage;
 import org.wf.dp.dniprorada.constant.KOATUU;
-import org.wf.dp.dniprorada.model.Category;
-import org.wf.dp.dniprorada.model.City;
-import org.wf.dp.dniprorada.model.Region;
-import org.wf.dp.dniprorada.model.Service;
-import org.wf.dp.dniprorada.model.ServiceData;
-import org.wf.dp.dniprorada.model.Subcategory;
+import org.wf.dp.dniprorada.model.*;
 import org.wf.dp.dniprorada.service.EntityService;
 import org.wf.dp.dniprorada.service.TableDataService;
 import org.wf.dp.dniprorada.util.GeneralConfig;
 import org.wf.dp.dniprorada.viewobject.TableData;
 
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
 @Controller
 @RequestMapping(value = "/services")
 public class ActivitiRestServicesController {
+
+   private static final String GET_SERVICES_TREE = "getServicesTree";
+
 
    @Autowired
    private BaseEntityDao baseEntityDao;
@@ -53,6 +48,10 @@ public class ActivitiRestServicesController {
 
    @Autowired
    private CachedInvocationBean cachedInvocationBean;
+
+   @Autowired(required = false)
+   private MethodCacheInterceptor methodCacheInterceptor;
+
    @Autowired
    GeneralConfig generalConfig;
 
@@ -60,7 +59,7 @@ public class ActivitiRestServicesController {
    public
    @ResponseBody
    ResponseEntity getService(@RequestParam(value = "nID") Long nID) {
-      Service service = baseEntityDao.getById(Service.class, nID);
+      Service service = baseEntityDao.findById(Service.class, nID);
       return regionsToJsonResponse(service);
    }
 
@@ -72,7 +71,15 @@ public class ActivitiRestServicesController {
       Service service = JsonRestUtils.readObject(jsonData, Service.class);
 
       Service updatedService = entityService.update(service);
+      clearGetServicesCache();
+
       return regionsToJsonResponse(updatedService);
+   }
+
+   private void clearGetServicesCache() {
+      if (methodCacheInterceptor != null) {
+         methodCacheInterceptor.clearCacheForMethod(CachedInvocationBean.class, "invokeUsingCache", GET_SERVICES_TREE);
+      }
    }
 
    @RequestMapping(value = "/removeService", method = RequestMethod.DELETE)
@@ -132,7 +139,7 @@ public class ActivitiRestServicesController {
    }
 
    private <T extends Entity> ResponseEntity deleteEmptyContentEntity(Class<T> entityClass, Long nID) {
-      T entity = baseEntityDao.getById(entityClass, nID);
+      T entity = baseEntityDao.findById(entityClass, nID);
       if (entity.getClass() == Service.class) {
          if (((Service) entity).getServiceDataList().isEmpty()) {
             return deleteApropriateEntity(entity);
@@ -156,26 +163,26 @@ public class ActivitiRestServicesController {
    public
    @ResponseBody
    ResponseEntity removeServicesTree() {
-      List<Category> categories = new ArrayList<>(baseEntityDao.getAll(Category.class));
+      List<Category> categories = new ArrayList<>(baseEntityDao.findAll(Category.class));
       for (int i = 0; i < categories.size(); i++) {
          Category category = categories.get(i);
-         baseEntityDao.remove(category);
+         baseEntityDao.delete(category);
       }
       return JsonRestUtils.toJsonResponse(HttpStatus.OK,
               new ResultMessage("success", "ServicesTree removed"));
    }
 
    private <T extends Entity> ResponseEntity deleteApropriateEntity(T entity) {
-      baseEntityDao.remove(entity);
+      baseEntityDao.delete(entity);
       return JsonRestUtils.toJsonResponse(HttpStatus.OK,
               new ResultMessage("success", entity.getClass() + " id: " + entity.getId() + " removed"));
    }
 
    private <T extends Entity> ResponseEntity recursiveForceServiceDelete(Class<T> entityClass, Long nID) {
-      T entity = baseEntityDao.getById(entityClass, nID);
+      T entity = baseEntityDao.findById(entityClass, nID);
       // hibernate will handle recursive deletion of all child entities
       // because of annotation: @OneToMany(mappedBy = "category",cascade = CascadeType.ALL, orphanRemoval = true)
-      baseEntityDao.remove(entity);
+      baseEntityDao.delete(entity);
       return JsonRestUtils.toJsonResponse(HttpStatus.OK,
               new ResultMessage("success", entityClass + " id: " + nID + " removed"));
    }
@@ -204,7 +211,7 @@ public class ActivitiRestServicesController {
    public
    @ResponseBody
    ResponseEntity getPlaces() {
-      List<Region> regions = baseEntityDao.getAll(Region.class);
+      List<Region> regions = baseEntityDao.findAll(Region.class);
       return regionsToJsonResponse(regions);
    }
 
@@ -243,10 +250,10 @@ public class ActivitiRestServicesController {
                     required = false) final List<String> placeUaIds) {
         final boolean bTest = generalConfig.bTest();
         SerializableResponseEntity<String> entity = cachedInvocationBean.invokeUsingCache(new CachedInvocationBean.Callback<SerializableResponseEntity<String>>(
-                "getServicesTree", partOfName, placeUaIds, bTest) {
+                GET_SERVICES_TREE, partOfName, placeUaIds, bTest) {
             @Override
             public SerializableResponseEntity<String> execute() {
-                List<Category> categories = new ArrayList<>(baseEntityDao.getAll(Category.class));
+                List<Category> categories = new ArrayList<>(baseEntityDao.findAll(Category.class));
 
                 if (!bTest) {
                     filterOutServicesByServiceNamePrefix(categories, SERVICE_NAME_TEST_PREFIX);
@@ -257,7 +264,7 @@ public class ActivitiRestServicesController {
                 }
 
                 if (placeUaIds != null) {
-                    placeUaIds.retainAll(SUPPORTED_PLACE_IDS);
+//TODO: Зачем это было добавлено?                    placeUaIds.retainAll(SUPPORTED_PLACE_IDS);
                     if (!placeUaIds.isEmpty()) {
                         filterServicesByPlaceIds(categories, placeUaIds);
                     }
@@ -305,7 +312,8 @@ public class ActivitiRestServicesController {
                         .hasNext();) {
                     Service service = serviceIterator.next();
                     boolean isPlaceMatched = false;
-                    List<ServiceData> serviceDatas = service.getServiceDataFiltered(generalConfig.bTest());
+                    //List<ServiceData> serviceDatas = service.getServiceDataFiltered(generalConfig.bTest());
+                    List<ServiceData> serviceDatas = service.getServiceDataFiltered(true);
                     if (serviceDatas != null) {
                         for (ServiceData serviceData : serviceDatas) {
                             City city = serviceData.getCity();
@@ -358,6 +366,7 @@ public class ActivitiRestServicesController {
 
       List<Category> categories = Arrays.asList(JsonRestUtils.readObject(jsonData, Category[].class));
       List<Category> updatedCategories = entityService.update(categories);
+      clearGetServicesCache();
 
       return categoriesToJsonResponse(updatedCategories).toResponseEntity();
    }
@@ -412,7 +421,9 @@ public class ActivitiRestServicesController {
                service.setInfo(null);
                service.setLaw(null);
                //service.setSub(service.getServiceDataList().size());
-               service.setSub(service.getServiceDataFiltered(generalConfig.bTest()).size());
+
+               List<ServiceData> serviceDataFiltered = service.getServiceDataFiltered(generalConfig.bTest());
+               service.setSub(serviceDataFiltered != null ? serviceDataFiltered.size() : 0);
                //service.setTests(service.getTestsCount());
                //service.setStatus(service.getTests(); service.getTestsCount());
                service.setStatus(service.getStatusID());

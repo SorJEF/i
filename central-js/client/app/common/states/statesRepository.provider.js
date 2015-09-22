@@ -1,23 +1,32 @@
 'use strict';
 
 angular.module('appBoilerPlate').provider('statesRepository', function StatesRepositoryProvider() {
+  var selfProvider = this;
   var findModeRegexp = /(\w*).(\w*).(\w*)(\w*|.*)*/;
 
   this.init = function (domen) {
     //test.kiev.igov.org.ua
 
-    this.domen = domen;
+    this.domain = domen;
+
+
     if (domen.split(':')[0] !== 'localhost') {
-      var matches = findModeRegexp.exec(domen);
-      if (matches[1] === 'test' ) {// || matches[1] === 'test-version'
-        if (matches[2] === 'version' ) {
-            this.mode = matches[3];
-        }else{
-            this.mode = matches[2];
+      if (domen.indexOf('kievcity')>=0) {
+        //https://es.kievcity.gov.ua
+        this.mode = 'kyiv';
+      }else{
+        var matches = findModeRegexp.exec(domen);
+        if (matches[1] === 'test' ) {// || matches[1] === 'test-version'
+          if (matches[2] === 'version' ) {
+              this.mode = matches[3];
+          }else{
+              this.mode = matches[2];
+          }
+        } else {
+          this.mode = matches[1];
         }
-      } else {
-        this.mode = matches[1];
       }
+
     } else {
       this.mode = 'local';
     }
@@ -38,6 +47,17 @@ angular.module('appBoilerPlate').provider('statesRepository', function StatesRep
     return 'app/header/' + header;
   };
 
+  var getFooter = function (mode) {
+    var footer;
+    if (mode === 'kyiv' || mode === 'kiev') {
+      footer = 'kyiv.footer.html';
+    } else {
+      footer = 'footer.html';
+    }
+    return 'app/footer/' + footer;
+  };
+
+
   this.index = function () {
     return {
       url: '/',
@@ -51,7 +71,8 @@ angular.module('appBoilerPlate').provider('statesRepository', function StatesRep
           controller: 'ServiceController'
         },
         footer: {
-          templateUrl: 'app/footer/footer.html'
+          //templateUrl: 'app/footer/footer.html'
+          templateUrl: getFooter(this.mode),
         }
       }
     };
@@ -68,6 +89,10 @@ angular.module('appBoilerPlate').provider('statesRepository', function StatesRep
       //return ['123','456'];
     }
     return [];
+  };
+
+  StatesRepository.prototype.isCentral = function(){
+    return selfProvider.isCentral();
   };
 
   this.$get = [function StatesRepositoryFactory() {

@@ -26,7 +26,7 @@ import java.util.Collection;
 
 public final class Util {
 
-    public static final String PATTERN_FILE_PATH_BEGIN = "../webapps/wf-region/WEB-INF/classes/pattern/";
+    public static final String PATTERN_FILE_PATH_BEGIN = "../webapps/wf/WEB-INF/classes/pattern/";
     public static final String PATTERN_DEFAULT_CONTENT_TYPE = "text/plain";
     private final static Logger log = LoggerFactory.getLogger(Util.class);
 
@@ -89,22 +89,20 @@ public final class Util {
         // Charset.forName(DEFAULT_ENCODING)
         // byte[] b = {(byte) 99, (byte)97, (byte)116};
         String s = "Not convertable!";
-        log.info("[sData]:a.length=" + a.length + ",Arrays.toString(a)="
-                + Arrays.toString(a));
+        //log.info("[sData]:a.length=" + a.length + ",Arrays.toString(a)=" + Arrays.toString(a));
         try {
             s = new String(a, DEFAULT_ENCODING);
         } catch (Exception oException) {
             log.error("[sData]", oException);
         }
-        log.info("[sData]:s=" + s);
+        //log.info("[sData]:s=" + s);
         return s;
     }
 
     public static byte[] aData(String s) {
-        log.info("[aData]:s=" + s);
+        //log.info("[aData]:s=" + s);
         byte[] a = s.getBytes(Charset.forName(DEFAULT_ENCODING));
-        log.info("[aData]:a.length=" + a.length + ",Arrays.toString(a)="
-                + Arrays.toString(a));
+        //log.info("[aData]:a.length=" + a.length + ",Arrays.toString(a)=" + Arrays.toString(a));
         return a;
     }
 
@@ -154,16 +152,16 @@ public final class Util {
     }
 
     private static Collection<File> getPatternFiles() {
-        File directory = new File("../webapps/wf-region/WEB-INF/classes/pattern/print");
+        File directory = new File("../webapps/wf/WEB-INF/classes/pattern/print");
         return FileUtils.listFiles(directory, null, true);
     }
 
     public static void replacePatterns(DelegateExecution execution, DelegateTask task, Logger oLog) {
         try {
             oLog.info("[replacePatterns]:task.getId()=" + task.getId());
-            oLog.info("[replacePatterns]:execution.getId()=" + execution.getId());
-            oLog.info("[replacePatterns]:task.getVariable(\"sBody\")=" + task.getVariable("sBody"));
-            oLog.info("[replacePatterns]:execution.getVariable(\"sBody\")=" + execution.getVariable("sBody"));
+            //oLog.info("[replacePatterns]:execution.getId()=" + execution.getId());
+            //oLog.info("[replacePatterns]:task.getVariable(\"sBody\")=" + task.getVariable("sBody"));
+            //oLog.info("[replacePatterns]:execution.getVariable(\"sBody\")=" + execution.getVariable("sBody"));
 
             EngineServices oEngineServices = execution.getEngineServices();
             RuntimeService oRuntimeService = oEngineServices.getRuntimeService();
@@ -177,12 +175,13 @@ public final class Util {
             }
 
             Collection<File> asPatterns = getPatternFiles();
-            for (FormProperty property : oTaskFormData.getFormProperties()) {
-                String sFieldID = property.getId();
-                String sExpression = property.getName();
+            for (FormProperty oFormProperty : oTaskFormData.getFormProperties()) {
+                String sFieldID = oFormProperty.getId();
+                String sExpression = oFormProperty.getName();
 
                 oLog.info("[replacePatterns]:sFieldID=" + sFieldID);
-                oLog.info("[replacePatterns]:sExpression=" + sExpression);
+                //oLog.info("[replacePatterns]:sExpression=" + sExpression);
+                oLog.info("[replacePatterns]:sExpression.length()=" + (sExpression!=null?sExpression.length()+"":""));
 
                 if (sExpression == null || sFieldID == null || !sFieldID.startsWith("sBody")) {
                     continue;
@@ -190,25 +189,30 @@ public final class Util {
 
                 for (File oFile : asPatterns) {
                     String sName = "pattern/print/"+oFile.getName();
-                    oLog.info("[replacePatterns]:sName=" + sName);
+                    //oLog.info("[replacePatterns]:sName=" + sName);
 
                     if (sExpression.contains("[" + sName + "]")) {
+                        oLog.info("[replacePatterns]:sName=" + sName);
+                        
                         String sData = getFromFile(oFile, null);
-                        oLog.info("[replacePatterns]:sData=" + sData);
+                        //oLog.info("[replacePatterns]:sData=" + sData);
+                        oLog.info("[replacePatterns]:sData.length()=" + (sData!=null?sData.length()+"":"null"));
                         if (sData == null) {
                             continue;
                         }
 
                         sExpression = sExpression.replaceAll("\\Q[" + sName + "]\\E", sData);
-                        oLog.info("[replacePatterns]:sExpression=" + sExpression);
+//                        oLog.info("[replacePatterns]:sExpression=" + sExpression);
 
                         oLog.info("[replacePatterns](sFieldID=" + sFieldID + "):1-Ok!");
                         oRuntimeService.setVariable(task.getProcessInstanceId(), sFieldID, sExpression);
-                        oLog.info("[replacePatterns](sFieldID=" + sFieldID + "):2-Ok:" + oRuntimeService
-                                .getVariable(task.getProcessInstanceId(), sFieldID));
+/*                        oLog.info("[replacePatterns](sFieldID=" + sFieldID + "):2-Ok:" + oRuntimeService
+                                .getVariable(task.getProcessInstanceId(), sFieldID));*/
                         oLog.info("[replacePatterns](sFieldID=" + sFieldID + "):3-Ok!");
                     }
+                    oLog.info("[replacePatterns](sName=" + sName + "):Ok!");
                 }
+                oLog.info("[replacePatterns](sFieldID=" + sFieldID + "):Ok!");
             }
         } catch (Exception oException) {
             oLog.error("[replacePatterns]", oException);
@@ -257,6 +261,11 @@ public final class Util {
             expression.setValue(value, execution);
         }
         return null;
+    }
+    
+    public static String deleteContextFromURL(String URL){
+    	String temp = URL.substring(URL.indexOf("//") + 2);
+        return temp.substring(temp.indexOf("/")) ;
     }
 
 }
