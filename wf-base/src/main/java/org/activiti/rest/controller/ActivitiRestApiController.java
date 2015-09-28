@@ -12,6 +12,9 @@ import org.activiti.engine.form.TaskFormData;
 import org.activiti.engine.history.HistoricProcessInstance;
 import org.activiti.engine.history.HistoricTaskInstance;
 import org.activiti.engine.identity.User;
+import org.activiti.engine.impl.form.FormPropertyImpl;
+import org.activiti.engine.impl.util.json.JSONArray;
+import org.activiti.engine.impl.util.json.JSONObject;
 import org.activiti.engine.repository.ProcessDefinition;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.*;
@@ -26,7 +29,6 @@ import org.activiti.rest.service.api.runtime.process.ExecutionBaseResource;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.mail.ByteArrayDataSource;
 import org.apache.commons.mail.EmailException;
-import org.codehaus.groovy.tools.shell.util.MessageSource;
 import org.joda.time.DateTime;
 import org.json.simple.JSONValue;
 import org.slf4j.Logger;
@@ -45,6 +47,8 @@ import org.wf.dp.dniprorada.engine.task.FileTaskUpload;
 import org.wf.dp.dniprorada.form.QueueDataFormType;
 import org.wf.dp.dniprorada.model.BuilderAtachModel;
 import org.wf.dp.dniprorada.model.ByteArrayMultipartFileOld;
+import org.wf.dp.dniprorada.rest.HttpRequester;
+import org.wf.dp.dniprorada.util.GeneralConfig;
 import org.wf.dp.dniprorada.util.Mail;
 import org.wf.dp.dniprorada.util.Util;
 import org.wf.dp.dniprorada.util.luna.AlgorithmLuna;
@@ -54,15 +58,10 @@ import javax.activation.DataSource;
 import javax.mail.MessagingException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import org.activiti.engine.history.HistoricDetail;
-import org.activiti.engine.impl.persistence.entity.HistoricFormPropertyEntity;
 
 /**
  * ...wf/service/... Example:
@@ -97,6 +96,10 @@ public class ActivitiRestApiController extends ExecutionBaseResource {
     private FormService formService;
     @Autowired
     private Mail oMail;
+    @Autowired
+    private GeneralConfig generalConfig;
+    @Autowired
+    private HttpRequester httpRequester;
 
     @RequestMapping(value = "/start-process/{key}", method = RequestMethod.GET)
     @Transactional
@@ -141,7 +144,7 @@ public class ActivitiRestApiController extends ExecutionBaseResource {
      * @return
      * @throws org.activiti.rest.controller.ActivitiIOException
      */
-    @RequestMapping(value = "/setAccessData", method = RequestMethod.GET)
+    /*@RequestMapping(value = "/setAccessData", method = RequestMethod.GET)
     @Transactional
     public @ResponseBody
     String setAccessData(
@@ -149,7 +152,7 @@ public class ActivitiRestApiController extends ExecutionBaseResource {
 
         String sKey = accessDataDao.setAccessData(sData);
         return sKey;
-    }
+    }*/
 
     /**
      * Укладываем в редис multipartFileToByteArray
@@ -1116,15 +1119,24 @@ public class ActivitiRestApiController extends ExecutionBaseResource {
 
     @RequestMapping(value = "/tasks/cancelTask", method = RequestMethod.POST)
     public @ResponseBody
-    void cancelTask(@RequestParam(value = "nID_Protected") Long nID_Protected,
+    //void cancelTask(@RequestParam(value = "nID_Protected") Long nID_Protected,
+    String cancelTask(@RequestParam(value = "nID_Protected") Long nID_Protected,
             @RequestParam(value = "sInfo", required = false) String sInfo) throws ActivitiRestException {
+        
+        String sMessage = "Ваша заявка відмінена. Ви можете подату нову на Порталі державних послуг iGov.org.ua.<\n<br>"
+            +"З повагою, команду порталу  iGov.org.ua";
+        
+        
         try {
             cancelTasksInternal(nID_Protected, sInfo);
+            return sMessage;
         } catch (CRCInvalidException | RecordNotFoundException | TaskAlreadyUnboundException e) {
             ActivitiRestException newErr = new ActivitiRestException(
                     "BUSINESS_ERR", e.getMessage(), e);
             newErr.setHttpStatus(HttpStatus.FORBIDDEN);
-            throw newErr;
+            sMessage = "Вибачте, виникла помилка при виконанні операції. Спробуйте ще раз, будь ласка";
+            return sMessage;
+            //throw newErr;
         }
     }
 
@@ -1170,9 +1182,238 @@ public class ActivitiRestApiController extends ExecutionBaseResource {
     }
 
     private static class TaskAlreadyUnboundException extends Exception {
-
         public TaskAlreadyUnboundException(String message) {
             super(message);
         }
+    }
+
+
+    /**
+     * issue 808. сервис ЗАПРОСА полей, требующих уточнения, c отсылкой уведомления гражданину
+     * @param nID_Protected - номер-ИД заявки (защищенный)
+     * @param saField -- строка-массива полей (например: "[{'id':'sFamily','type':'string','value':'Белявский'},{'id':'nAge','type':'long'}]")
+     * @param sMail -- строка электронного адреса гражданина
+     * @param sHead -- строка заголовка письма //опциональный (если не задан, то "Необходимо уточнить данные")
+     * @param sBody -- строка тела письма //опциональный (если не задан, то пустота)
+     * @throws ActivitiRestException
+     */
+    @RequestMapping(value = "/setTaskQuestions", method = RequestMethod.GET)
+    public @ResponseBody
+    void setTaskQuestions(@RequestParam(value = "nID_Protected") Long nID_Protected,
+                    @RequestParam(value = "saField") String saField,
+                    @RequestParam(value = "sMail") String sMail,
+                    @RequestParam(value = "sHead", required = false) String sHead,
+                    @RequestParam(value = "sBody", required = false) String sBody) throws ActivitiRestException {
+
+        try {
+            sHead = sHead == null ? new String("Необхідно уточнити дані".getBytes("UTF-8"), "UTF-8") : sHead;
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        sBody = sBody == null ? "" : sBody;
+        String sToken = generateToken();
+        try {
+            updateHistoryEvent_Service(saField, sHead, sBody, sToken);
+        } catch (Exception e) {
+            throw new ActivitiRestException(
+                    ActivitiExceptionController.BUSINESS_ERROR_CODE,
+                   "error during updating historyEvent_service: " + e.getMessage(),e,
+                    HttpStatus.FORBIDDEN);
+        }
+        try {
+            sendEmail(sHead, createEmailBody(nID_Protected,saField,sBody, sToken),sMail);
+        } catch (EmailException|UnsupportedEncodingException e) {
+            throw new ActivitiRestException(
+                    ActivitiExceptionController.SYSTEM_ERROR_CODE,
+                    "error during sending email: " + e.getMessage(),e,
+                    HttpStatus.FORBIDDEN);
+        }
+        setInfo_ToActiviti("" + nID_Protected/10, saField, sBody);
+    }
+
+    private String createEmailBody(Long nID_Protected, String soData, String sBody, String sToken) throws UnsupportedEncodingException {
+        StringBuilder emailBody = new StringBuilder(sBody);
+        emailBody.append("<br/>")
+                .append(createTable(soData))
+                .append("<br/>");
+        String link = (new StringBuilder(generalConfig.sHostCentral())
+                .append("/order?nID_Protected=")
+                .append(nID_Protected)
+                .append("&sToken=")
+                .append(sToken))
+                    .toString();
+        emailBody.append(link)
+                .append("<br/>");
+        return emailBody.toString();
+    }
+
+    private void sendEmail(String sHead, String sBody, String recipient) throws EmailException {
+        oMail.reset();
+        oMail._To(recipient)
+             ._Head(sHead)
+             ._Body(sBody);
+        oMail.send();
+    }
+
+    private String createTable(String soData) throws UnsupportedEncodingException {
+        if (soData == null || "[]".equals(soData)){
+            return "";
+        }
+        StringBuilder tableStr = new StringBuilder("<table><tr><th>Поле</th><th>Тип </th><th> Поточне значення</th></tr>");
+        JSONObject jsnobject = new JSONObject("{ soData:" + soData + "}");
+        JSONArray jsonArray = jsnobject.getJSONArray("soData");
+        for (int i = 0; i < jsonArray.length(); i++) {
+            JSONObject record = jsonArray.getJSONObject(i);
+            tableStr.append("<tr><td>")
+                    .append(record.opt("id") != null ? record.get("id") : "?")
+                    .append("</td><td>")
+                    .append(record.opt("type")!= null ? record.get("type").toString() : "??")
+                    .append("</td><td>")
+                    .append(record.opt("value")!= null ? record.get("value").toString() : "")
+                    .append("</td></tr>");
+        }
+        tableStr.append("</table>");
+        return tableStr.toString();
+    }
+
+    //steals from DocumentAccessDaoImpl :)
+    private String generateToken() {
+        // 97-122 small character
+        // 65-90 big character
+        // 48-57 number
+        StringBuilder os = new StringBuilder();
+        Random ran = new Random();
+        for (int i = 1; i <= 20; i++) {
+            int a = ran.nextInt(3) + 1;
+            switch (a) {
+                case 1:
+                    int num = ran.nextInt((57 - 48) + 1) + 48;
+                    os.append((char) num);
+                    break;
+                case 2:
+                    int small = ran.nextInt((122 - 97) + 1) + 97;
+                    os.append((char) small);
+                    break;
+                case 3:
+                    int big = ran.nextInt((90 - 65) + 1) + 65;
+                    os.append((char) big);
+                    break;
+            }
+        }
+        return os.toString();
+    }
+
+    private String updateHistoryEvent_Service(String saField, String sHead, String sBody, String sToken) throws Exception {
+        String URI = "/wf/service/services/updateHistoryEvent_Service";
+        Map<String, String> params = new HashMap<>();
+        params.put("soData", saField);
+        params.put("sHead", sHead);
+        params.put("sBody", sBody);
+        params.put("sToken", sToken);
+        params.put("sID_Status", "setTaskQuestions");
+        params.put("sAccessContract", "Request");
+        String sAccessKey_HistoryEvent = accessDataDao.setAccessData(httpRequester.getFullURL(URI, params));
+        params.put("sAccessKey", sAccessKey_HistoryEvent);
+        log.info("sAccessKey=" + sAccessKey_HistoryEvent);
+        String soJSON_HistoryEvent = httpRequester.get(generalConfig.sHostCentral() + URI, params);
+        log.info("soJSON_HistoryEvent="+soJSON_HistoryEvent);
+        return soJSON_HistoryEvent;
+    }
+    
+    @RequestMapping(value = "/setTaskAnswer", method = RequestMethod.GET)
+    public @ResponseBody
+    void setTaskAnswer(@RequestParam(value = "nID_Protected") Long nID_Protected,
+                    @RequestParam(value = "saField") String saField,
+                    @RequestParam(value = "sToken") String sToken,
+                    @RequestParam(value = "sHead", required = false) String sHead,
+                    @RequestParam(value = "sBody", required = false) String sBody) throws ActivitiRestException {
+        try {
+        	sHead = sHead == null ? "На заявку " + nID_Protected + " дана відповідь громаданином" : sHead;
+        	AlgorithmLuna.validateProtectedNumber(nID_Protected);
+            String processInstanceID = String.valueOf(AlgorithmLuna.getOriginalNumber(nID_Protected));
+            log.info("Found processInstanceID=" + processInstanceID + ". Will get history event service");
+        	String historyEventService = getHistoryEvent_Service(nID_Protected.toString());
+        	JSONObject fieldsJson = new JSONObject(historyEventService);
+        	if (fieldsJson.has("sToken")){
+        		String tasksToken = fieldsJson.getString("sToken");
+        		if (tasksToken.isEmpty() || !tasksToken.equals(sToken)){
+            		throw new ActivitiRestException(
+                            ActivitiExceptionController.BUSINESS_ERROR_CODE,
+                           "Token is wrong");        			
+        		}
+        	} else {
+        		throw new ActivitiRestException(
+                        ActivitiExceptionController.BUSINESS_ERROR_CODE,
+                       "Token is absent");
+        	}
+        	
+        	JSONObject jsnobject = new JSONObject("{ soData:" + saField + "}");
+            JSONArray jsonArray = jsnobject.getJSONArray("soData");
+        	List<Task> tasks = taskService.createTaskQuery().processInstanceId(processInstanceID).list();
+        	
+        	if (tasks != null){
+            	runtimeService.setVariable(processInstanceID, "sAnswer", sBody);
+            	log.info("Added variable sAnswer to the process " + processInstanceID);
+        		
+        		log.info("Found " + tasks.size() + " tasks by nID_Protected...");
+        		for (Task task : tasks){
+        			log.info("task;" + task.getName() + "|" + task.getDescription() + "|" + task.getId());
+        			TaskFormData data = formService.getTaskFormData(task.getId());
+                    for (int i = 0; i < jsonArray.length(); i++) {
+                        JSONObject record = jsonArray.getJSONObject(i);
+                        String fieldId = (String) record.get("id");
+                    for (FormProperty property : data.getFormProperties()) {
+                    	if (fieldId.equals(property.getId())){
+                    		if (property instanceof FormPropertyImpl){
+                        		log.info("Updating property's " + property.getId() + " value from " + 
+                        					property.getValue() + " to " + record.get("value"));
+                    			((FormPropertyImpl)property).setValue((String) record.get("value"));                     			
+                    		}
+                    	} else {
+                    		log.info("Skipping property " + property.getId() + " as there is no such property in input parameter");
+                    	}
+                    }
+                    }
+        		}
+        	}
+        	updateHistoryEvent_Service(processInstanceID, saField, null);
+        } catch (Exception e) {
+            throw new ActivitiRestException(
+                    ActivitiExceptionController.BUSINESS_ERROR_CODE,
+                    e.getMessage(),e,
+                    HttpStatus.FORBIDDEN);
+        }
+    }
+    
+    private String getHistoryEvent_Service(String nID_Protected) throws Exception {
+        String URI = "/wf/service/services/getHistoryEvent_Service";
+        Map<String, String> params = new HashMap<>();
+        params.put("nID_Protected", nID_Protected);
+        log.info("Getting URL with parameters: " + generalConfig.sHostCentral() + URI + params);
+        String soJSON_HistoryEvent = httpRequester.get(generalConfig.sHostCentral() + URI, params);
+        log.info("soJSON_HistoryEvent="+soJSON_HistoryEvent);
+        return soJSON_HistoryEvent;
+    }
+    
+    private String updateHistoryEvent_Service(String sID_Process, String saField, String sToken) throws Exception {
+        String URI = "/wf/service/services/updateHistoryEvent_Service";
+        Map<String, String> params = new HashMap<>();
+        params.put("nID_Process", sID_Process);
+        params.put("soData", saField);
+        params.put("sToken", sToken);
+        params.put("sID_Status", "setTaskAnswer");
+        String sAccessKey_HistoryEvent = accessDataDao.setAccessData(httpRequester.getFullURL(URI, params));
+        params.put("sAccessKey", sAccessKey_HistoryEvent);
+        log.info("sAccessKey=" + sAccessKey_HistoryEvent);
+        String soJSON_HistoryEvent = httpRequester.get(generalConfig.sHostCentral() + URI, params);
+        log.info("soJSON_HistoryEvent="+soJSON_HistoryEvent);
+        return soJSON_HistoryEvent;
+    }
+
+    private void setInfo_ToActiviti(String snID_Process, String saField, String sBody) {
+        log.info("try to set saField=%s and sBody=%s to snID_Process=%s", saField, sBody, snID_Process);
+        runtimeService.setVariable(snID_Process, "saFieldQuestion", saField);
+        runtimeService.setVariable(snID_Process, "sQuestion", sBody);
+        log.info("completed set saField=%s and sBody=%s to snID_Process=%s", saField, sBody, snID_Process);
     }
 }
