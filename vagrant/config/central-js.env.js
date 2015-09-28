@@ -25,7 +25,7 @@ module.exports = {
   ACTIVITI_PROTOCOL: 'http',
   ACTIVITI_HOSTNAME: '192.168.10.12:8080',
   ACTIVITI_PORT: 8080,
-  ACTIVITI_PATH: '/wf-central/service',
+  ACTIVITI_PATH: '/wf/service',
   ACTIVITI_USER: 'activiti-master',
   ACTIVITI_PASSWORD: 'UjhtJnEvf!',
 

@@ -14,8 +14,8 @@
 Через 10-30 хвилин, будуть розгорнуті наступні компоненти в VirtualBox з якими можна почати роботу за наступними посиланнями:
 * `central-js` - http://192.168.10.10:9000/
 * `dashboard-js` - http://192.168.10.11:9000/
-* `wf-central` - http://192.168.10.12:8080/wf-central/
-* `wf-region` - http://192.168.10.13:8080/wf-region/
+* `wf-central` - http://192.168.10.12:8080/wf/
+* `wf-region` - http://192.168.10.13:8080/wf/
 
 ## Розгортання окремих компонент
 
@@ -32,7 +32,7 @@
     vagrant suspend [ім'я компоненти (опціонально)]
 
 або якщо ви хочете її повністю вимкнути
-    
+
     vagrant halt [ім'я компоненти (опціонально)]
 
 Щоб повністю знищити віртуалку, наберіть:
@@ -50,7 +50,7 @@ JS компоненти самі перезавантажуються після
 
 Якщо вам потрібно розгорнути компоненту локально для під'єднання до розгорнутих `wf-central`, `wf-region` скопіюйте вже створені конфігурації з теки [vagrant/config](vagrant/config). Приклад Unix команди:
 
-    cp vagrant/config/central-js.env.js central-js/server/config/local.env.js 
+    cp vagrant/config/central-js.env.js central-js/server/config/local.env.js
 
 ### Для java/activiti розробників (`wf-central`, `wf-region`)
 

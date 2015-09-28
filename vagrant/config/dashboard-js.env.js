@@ -17,7 +17,7 @@ module.exports = {
   ACTIVITI_PROT: 'http',
   ACTIVITI_HOST: '192.168.10.13',
   ACTIVITI_PORT: 8080,
-  ACTIVITI_REST: 'wf-region/service',
+  ACTIVITI_REST: 'wf/service',
   ACTIVITI_USER: 'activiti-master',
   ACTIVITI_PASSWORD: 'UjhtJnEvf!',
   ACTIVITI_SESSION_IDLE: '3000',
@@ -28,4 +28,3 @@ module.exports = {
   // CERTIFICATE: '/sybase/cert/server.crt',
   // SSL_PORT: 8081
 };
-
